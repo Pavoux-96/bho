@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gioco con Autenticazione e Dati (jQuery e MongoDB)</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+  <h1>Gioco con Autenticazione e Dati (jQuery e MongoDB)</h1>
+  
+  <!-- Form per il login -->
+  <form id="loginForm">
+    <h2>Login</h2>
+    <label for="emailLogin">Email:</label>
+    <input type="email" id="emailLogin" name="emailLogin" required><br>
+    
+    <label for="passwordLogin">Password:</label>
+    <input type="password" id="passwordLogin" name="passwordLogin" required><br>
+    
+    <button type="submit">Login</button>
+  </form>
+  
+  <!-- Form per la registrazione -->
+  <form id="registerForm">
+    <h2>Registrazione</h2>
+    <label for="emailRegister">Email:</label>
+    <input type="email" id="emailRegister" name="emailRegister" required><br>
+    
+    <label for="passwordRegister">Password:</label>
+    <input type="password" id="passwordRegister" name="passwordRegister" required><br>
+    
+    <button type="submit">Registrati</button>
+  </form>
+  
+  <!-- Div per mostrare i dati dell'utente -->
+  <div id="userData" style="display: none;">
+    <h2>Dati Utente</h2>
+    <p><strong>Username:</strong> <span id="username"></span></p>
+    <p><strong>Score:</strong> <span id="score"></span></p>
+    <button id="logoutButton">Logout</button>
+  </div>
+  
+  <script>
+    // Gestisci il login utilizzando jQuery
+    $(document).ready(function() {
+      $('#loginForm').submit(async function(e) {
+        e.preventDefault();
+        const email = $('#emailLogin').val();
+        const password = $('#passwordLogin').val();
+        
+        try {
+          // Effettua il login con email e password
+          const response = await $.ajax({
+            url: '/api/login',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ email, password }),
+          });
+          
+          // Mostra i dati dell'utente
+          $('#username').text(response.username);
+          $('#score').text(response.score);
+          $('#userData').show();
+        } catch (error) {
+          console.error('Errore durante il login:', error);
+          alert('Errore durante il login. Controlla la console per dettagli.');
+        }
+      });
+      
+      // Gestisci la registrazione utilizzando jQuery
+      $('#registerForm').submit(async function(e) {
+        e.preventDefault();
+        const email = $('#emailRegister').val();
+        const password = $('#passwordRegister').val();
+        
+        try {
+          // Registra un nuovo utente con email e password
+          await $.ajax({
+            url: '/api/register',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ email, password }),
+          });
+          
+          console.log('Utente registrato con successo');
+          alert('Registrazione completata. Puoi effettuare il login.');
+          
+          // Pulisci i campi del form di registrazione
+          $('#emailRegister').val('');
+          $('#passwordRegister').val('');
+        } catch (error) {
+          console.error('Errore durante la registrazione:', error);
+          alert('Errore durante la registrazione. Controlla la console per dettagli.');
+        }
+      });
+      
+      // Gestisci il logout utilizzando jQuery
+      $('#logoutButton').click(async function() {
+        try {
+          // Esegui il logout
+          const response = await $.ajax({
+            url: '/api/logout',
+            method: 'POST',
+          });
+          
+          console.log('Utente disconnesso');
+          $('#userData').hide();
+        } catch (error) {
+          console.error('Errore durante il logout:', error);
+          alert('Errore durante il logout. Controlla la console per dettagli.');
+        }
+      });
+    });
+  </script>
+
+  <!-- Backend Node.js con Express e MongoDB -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.24.0/axios.min.js"></script>
+  <script>
+    const express = require('express');
+    const mongoose = require('mongoose');
+    const bodyParser = require('body-parser');
+
+    const app = express();
+    app.use(bodyParser.json());
+
+    // Connessione a MongoDB tramite mongoose
+    mongoose.connect('mongodb://localhost:27017/nome-del-tuo-db', {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    const db = mongoose.connection;
+    db.on('error', console.error.bind(console, 'Errore di connessione MongoDB:'));
+    db.once('open', () => {
+      console.log('Connessione a MongoDB riuscita');
+    });
+
+    // Schema e modello per i giocatori
+    const playerSchema = new mongoose.Schema({
+      email: String,
+      password: String,
+      username: String,
+      score: Number
+    });
+    const Player = mongoose.model('Player', playerSchema);
+
+    // Endpoint per la registrazione di un nuovo giocatore
+    app.post('/api/register', async (req, res) => {
+      const { email, password } = req.body;
+      try {
+        const newPlayer = await Player.create({
+          email,
+          password,
+          username: email.split('@')[0], // Esempio di generazione di username
+          score: 0 // Punteggio iniziale
+        });
+        console.log('Nuovo giocatore registrato:', newPlayer);
+        res.status(201).json({ message: 'Registrazione completata' });
+      } catch (error) {
+        console.error('Errore durante la registrazione:', error);
+        res.status(500).json({ message: 'Errore durante la registrazione' });
+      }
+    });
+
+    // Endpoint per il login di un giocatore esistente
+    app.post('/api/login', async (req, res) => {
+      const { email, password } = req.body;
+      try {
+        const player = await Player.findOne({ email, password });
+        if (!player) {
+          throw new Error('Credenziali non valide');
+        }
+        res.json({
+          username: player.username,
+          score: player.score
+        });
+      } catch (error) {
+        console.error('Errore durante il login:', error);
+        res.status(401).json({ message: 'Credenziali non valide' });
+      }
+    });
+
+    // Endpoint per il logout di un giocatore
+    app.post('/api/logout', async (req, res) => {
+      // Operazioni di logout (se necessario)
+      res.json({ message: 'Logout effettuato con successo' });
+    });
+
+    // Avvio del server Express
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server avviato sulla porta ${PORT}`);
+    });
+  </script>
+</body>
+</html>
